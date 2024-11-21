@@ -1,0 +1,222 @@
+{% extends "arcade/base.html" %}
+{% load static %}
+
+{% block main_content %}
+<style>
+    /* Modal background */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* Modal content */
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 300px;
+    text-align: center;
+    position: relative;
+}
+
+/* Close button */
+.close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+</style>
+    <div class="container">
+    <link rel="stylesheet" href="{% static 'arcade/css/styles.css' %}">
+        <div class="left-panel">
+            <div class="transaction-container">
+                <table class="transaction-table">
+                    <thead>
+                        <tr>
+                            <th>Quantity</th>
+                            <th>Description</th>
+                            <th>Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionBody">
+                        <!-- Dynamic rows will go here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="controls">
+                <button onclick="openDiscountOverlay()">Disc%</button>
+                <button onclick="holdTransaction()">Hold</button>
+                <button onclick="recallTransaction()">Recall</button>
+                <button onclick="openRefundOverlay()">Refund</button>
+                <button onclick="clearTransaction()">Clear</button>
+            </div>
+            
+           
+            <div class="totals">
+                <div>Total:  ₦<span id="total">0.00</span></div>
+                <div>Amount Paid:  ₦<span id="amountPaid">0.00</span></div>
+                <div>Amount Due:  ₦<span id="amountDue">0.00</span></div>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="categories">
+                {% for item in items %}
+                    <button class="bb2" onclick="addItem('{{item.description}}',{{item.price}})">{{item.name}}</button>
+                {% endfor %}
+            </div>
+            <div class="numeric-keypad">
+                <input type="text" id="quantityInput" placeholder="Enter Quantity" onfocus="focusQuantityInput()">
+                <div class="keys">
+                    <button onclick="appendNumber(1)">1</button>
+                    <button onclick="appendNumber(2)">2</button>
+                    <button onclick="appendNumber(3)">3</button>
+                    <button onclick="appendNumber(4)">4</button>
+                    <button onclick="appendNumber(5)">5</button>
+                    <button onclick="appendNumber(6)">6</button>
+                    <button onclick="appendNumber(7)">7</button>
+                    <button onclick="appendNumber(8)">8</button>
+                    <button onclick="appendNumber(9)">9</button>
+                    <button onclick="appendNumber(0)">0</button>
+                    <button onclick="clearInput()">cl</button>
+                    <button onclick="backspace()">BACK</button>
+                </div>
+                <br>
+                <div class="payment-methods">
+                    <button onclick="showPaymentModal()">Make Payment</button>
+                </div>
+                <!-- Payment Modal -->
+                <div id="paymentModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="close" onclick="closePaymentModal()">&times;</span>
+                        <h2>Make Payment</h2>
+                        <hr>
+                        <div class="payment-section">
+                            <input type="text" id="amountInput" placeholder="Enter Amount Paid" 
+                                onfocus="focusAmountInput()" oninput="updatePayment()">
+                        </div>
+                        <div class="payment-methods">
+                            <button onclick="pay('Cash')">Cash</button>
+                            <button onclick="pay('Card')">Card</button>
+                            <button onclick="pay('Transfer')">Transfer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+            // Show the payment modal
+            function showPaymentModal() {
+                document.getElementById('paymentModal').style.display = 'flex';
+            }
+
+            // Close the payment modal
+            function closePaymentModal() {
+                document.getElementById('paymentModal').style.display = 'none';
+            }
+        </script>
+        <div class="side-panel">
+            <button onclick="openDiscountOverlay()">Disc%</button>
+            <button onclick="setPrice()">Set Price</button>
+            <button onclick="viewSalesHistory()">Sales History</button>
+            <button onclick="openMenu()">Menu</button>
+
+            <div class="userLoggedin">
+                <p>Welcome, <span id="usernameDisplay">{{user.first_name | title}} {{user.last_name | title}}</span></p>
+                <button class="logout-btn">Log Out</button>
+            </div>
+        </div>
+
+<!-- Discount Overlay -->
+<div class="discount-overlay" id="discountOverlay">
+    <div class="discount-container">
+        <button class="close-discount" onclick="closeDiscountOverlay()">X</button>
+        <h3>Apply Discount</h3>
+        <label for="discountPercentage">Discount Percentage:</label>
+        <input type="number" id="discountPercentage" placeholder="Enter % (e.g., 10)" />
+
+        <label for="discountType">Apply Discount To:</label>
+        <select id="discountType" onchange="toggleItemIndexInput()">
+            <option value="total">Total</option>
+            <option value="item">Specific Item</option>
+        </select>
+
+        <label for="itemIndex" id="itemIndexLabel" style="display: none;">Item Row (1, 2, ...):</label>
+        <input type="number" id="itemIndex" placeholder="Item Index" style="display: none;" />
+
+        <div class="discount-actions">
+            <button onclick="applyDiscount()">Apply</button>
+            <button onclick="closeDiscountOverlay()">Cancel</button>
+        </div>
+    </div>
+</div>
+       
+
+        <div class="refund-overlay" id="refundOverlay">
+            <div class="refund-container">
+                <h3>Process Refund</h3>
+                
+                <label for="refundReason">Select Refund Reason:</label>
+                <select id="refundReason" onchange="handleRefundReasonChange()">
+                    <option value="Changed their mind">Changed their mind</option>
+                    <option value="Product defect">Product defect</option>
+                    <option value="Wrong item delivered">Wrong item delivered</option>
+                    <option value="Other">Other</option>
+                </select>
+        
+                <label for="additionalReason" id="additionalReasonLabel" style="display: none;">Specify Reason:</label>
+                <textarea id="additionalReason" placeholder="Enter additional reason" style="display: none;"></textarea>
+        
+                <div class="refund-actions">
+                    <button onclick="processRefund()">Process Refund</button>
+                    <button onclick="closeRefundOverlay()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menu Overlay -->
+<div class="menu-overlay" id="menuOverlay">
+    <div class="menu-container">
+        <button class="close-menu" onclick="closeMenu()">X</button>
+        <div class="menu-buttons">
+            <button onclick="previewOlderSales()">Preview Older Sales</button>
+            <button onclick="printLastReceipt()">Print Last Receipt</button>
+            <button onclick="applyDiscount()">Disc%</button>
+            
+            <button onclick="GlobalReport()">Global Report</button>
+            <button onclick="paidInPaidOut()">Paid in paid out</button>
+        
+           
+                
+                <button onclick="setPrice()">Set Price</button>
+                <button onclick="viewSalesHistory()">Sales History</button>
+                <button onclick="logout()">Log Out</button>
+                <button onclick="endOfDay()">End of Day</button>
+                <button onclick="goBack()">Esc - Back</button>
+          
+            
+
+
+            <button onclick="logout()">Log Out</button>
+            <button onclick="endOfDay()">End of Day</button>
+            <button onclick="goBack()">Esc - Back</button>
+        </div>
+    </div>
+</div>
+
+        
+    </div>
+    <script src="{% static 'arcade/js/script.js' %}"></script>
+{% endblock main_content %}

@@ -1,0 +1,52 @@
+
+<div class="container">
+    <h1>Manage User Access</h1>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="user_id">Select User:</label>
+            <select id="user_id" name="user_id" class="form-control">
+                {% for user in users %}
+                <option value="{{ user.id }}">{{ user.get_full_name }} ({{ user.phone_number }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="group_name">Assign to Group:</label>
+            <select id="group_name" name="group_name" class="form-control">
+                {% for group in groups %}
+                <option value="{{ group.name }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Assign</button>
+    </form>
+
+    <hr>
+
+    <h2>Existing Group Assignments</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Groups</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.get_full_name }} ({{ user.phone_number }})</td>
+                <td>
+                    {% for group in user.groups.all %}
+                    <span class="badge bg-secondary">{{ group.name }}</span>
+                    {% empty %}
+                    No groups assigned
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
