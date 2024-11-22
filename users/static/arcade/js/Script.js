@@ -1,22 +1,68 @@
 let totalAmount = 0;
 let quantity = 1; // Default quantity
 let activeField = "quantityInput"; // Default active field
+let saleId = null; // Global variable to track the current sale ID
 
-// Add an item with the specified quantity
-function addItem(itemName, itemPrice) {
+function addItem(itemName, itemPrice, itemID) {
     const price = itemPrice; // Example fixed price per item
     const tbody = document.getElementById('transactionBody');
     const row = document.createElement('tr');
     const itemTotal = quantity * price;
-    row.innerHTML = `<td>${quantity}</td><td>${itemName}</td><td> ₦${price.toFixed(2)}</td><td> ₦${itemTotal.toFixed(2)}</td>`;
+    row.innerHTML = `<td>${itemID}</td><td>${quantity}</td><td>${itemName}</td><td> ₦${price.toFixed(2)}</td><td> ₦${itemTotal.toFixed(2)}</td>`;
     tbody.appendChild(row);
     totalAmount += itemTotal;
     document.getElementById('total').innerText = totalAmount.toFixed(2);
+
+    // If this is the first item, create the sale
+    if (!saleId) {
+        const cashierId = document.getElementById('cashierId').value; // Hidden input for cashier ID
+
+        $.ajax({
+            url: '/arcade/create-sale/',
+            method: 'POST',
+            data: {
+                cashier_id: cashierId,
+                total_amount: totalAmount,
+                csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            success: function(response) {
+                saleId = response.sale_id; // Save the sale ID for subsequent items
+                addSaleItem(itemID, itemName, price, quantity); // Add the first item after creating the sale
+            },
+            error: function() {
+                alert('Failed to create sale.');
+            }
+        });
+    } else {
+        // Add the item to the existing sale
+        addSaleItem(itemID, itemName, price, quantity);
+    }
 
     // Reset quantity to 1 after adding an item
     quantity = 1;
     document.getElementById('quantityInput').value = '';
 }
+
+function addSaleItem(itemID, itemName, price, quantity) {
+    $.ajax({
+        url: '/arcade/add-sale-item/',
+        method: 'POST',
+        data: {
+            sale_id: saleId,
+            product_id: itemID,
+            quantity: quantity,
+            price: price,
+            csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        success: function(response) {
+            console.log(`Item added to sale: ${itemName} x${quantity}`);
+        },
+        error: function() {
+            alert(`Failed to add item: ${itemName}`);
+        }
+    });
+}
+
 
 // Append number to the active field
 function appendNumber(num) {
@@ -187,9 +233,12 @@ function clearTransaction() {
 function refund() {
     alert('Refund feature is not implemented yet.');
 }
-
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
 // Clear all transactions
 function clearTransaction() {
+   saleId = null
     document.getElementById('transactionBody').innerHTML = '';
     totalAmount = 0;
     document.getElementById('total').innerText = totalAmount.toFixed(2);
@@ -226,17 +275,36 @@ document.getElementById('discountType').addEventListener('change', function () {
     }
 });
 
-// Apply the discount
 function applyDiscount() {
     const discountPercentage = parseFloat(document.getElementById('discountPercentage').value) || 0;
     const discountType = document.getElementById('discountType').value;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
     if (discountType === 'total') {
         // Apply discount to the total
         const discountAmount = (totalAmount * discountPercentage) / 100;
         totalAmount -= discountAmount;
         document.getElementById('total').innerText = totalAmount.toFixed(2);
-        alert(`Discount of ${discountPercentage}% applied to total. New Total: $${totalAmount.toFixed(2)}`);
+        console.log('asssa')
+        // Send AJAX request to create SaleDiscount
+        $.ajax({
+            url: '/arcade/apply-sale-discount/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            data: {
+                cashier_id: 1,  // Replace with actual cashier ID
+                sale_id: 1,     // Replace with actual sale ID
+                proposed_discount: discountAmount
+            },
+            success: function (response) {
+                alert(response.message);
+            },
+            error: function () {
+                alert('Failed to apply discount.');
+            }
+        });
+
     } else if (discountType === 'item') {
         // Apply discount to a specific item
         const itemIndex = parseInt(document.getElementById('itemIndex').value) - 1; // Convert 1-based index to 0-based
@@ -245,15 +313,33 @@ function applyDiscount() {
 
         if (itemIndex >= 0 && itemIndex < rows.length) {
             const cells = rows[itemIndex].getElementsByTagName('td');
-            const itemTotal = parseFloat(cells[3].innerText.replace('$', ''));
+            const itemTotal = parseFloat(cells[3].innerText.replace('₦', ''));
             const discountAmount = (itemTotal * discountPercentage) / 100;
             const newTotal = itemTotal - discountAmount;
-            cells[3].innerText = `$${newTotal.toFixed(2)}`;
+            cells[3].innerText = `₦${newTotal.toFixed(2)}`;
 
             // Update the grand total
             totalAmount -= discountAmount;
             document.getElementById('total').innerText = totalAmount.toFixed(2);
-            alert(`Discount of ${discountPercentage}% applied to item. New Item Total: $${newTotal.toFixed(2)}`);
+
+            // Send AJAX request to create SaleItemDiscount
+            $.ajax({
+                url: '/arcade/apply-sale-item-discount/',
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                data: {
+                    cashier_id: 1,       // Replace with actual cashier ID
+                    sale_item_id: 1,    // Replace with actual sale item ID
+                    proposed_discount: discountAmount
+                },
+                success: function (response) {
+                    alert(response.message);
+                },
+                error: function () {
+                    alert('Failed to apply item discount.');
+                }
+            });
+
         } else {
             alert('Invalid item index.');
         }
@@ -261,6 +347,7 @@ function applyDiscount() {
 
     closeDiscountOverlay();
 }
+
 // Open the refund overlay
 function openRefundOverlay() {
     document.getElementById('refundOverlay').style.display = 'flex';
@@ -391,6 +478,27 @@ function applyDiscount() {
         const discountAmount = (totalAmount * discountPercentage) / 100;
         totalAmount -= discountAmount;
         document.getElementById('total').innerText = totalAmount.toFixed(2);
+
+        // AJAX call to create SaleDiscount
+       
+        const cashierId = document.getElementById('cashierId').value; // Hidden input for cashier ID
+
+        $.ajax({
+            url: '/arcade/create-sale-discount/',
+            method: 'POST',
+            data: {
+                sale_id: saleId,
+                proposed_discount: discountAmount,
+                csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            success: function(response) {
+                alert(response.message);
+            },
+            error: function() {
+                alert('Failed to create sale discount.');
+            }
+        });
+
         alert(`Discount of ${discountPercentage}% applied to total. New Total: $${totalAmount.toFixed(2)}`);
     } else if (discountType === 'item') {
         // Apply discount to a specific item
@@ -408,6 +516,28 @@ function applyDiscount() {
             // Update the grand total
             totalAmount -= discountAmount;
             document.getElementById('total').innerText = totalAmount.toFixed(2);
+
+            // AJAX call to create SaleItemDiscount
+            const saleItemId = rows[itemIndex].dataset.saleItemId; // Assume each row has a data attribute for sale item ID
+            const cashierId = document.getElementById('cashierId').value; // Hidden input for cashier ID
+
+            $.ajax({
+                url: '/arcade/create-sale-item-discount/',
+                method: 'POST',
+                data: {
+                    sale_item_id: saleItemId,
+                    cashier_id: cashierId,
+                    proposed_discount: discountAmount,
+                    csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                success: function(response) {
+                    alert(response.message);
+                },
+                error: function() {
+                    alert('Failed to create sale item discount.');
+                }
+            });
+
             alert(`Discount of ${discountPercentage}% applied to item. New Item Total: $${newTotal.toFixed(2)}`);
         } else {
             alert('Invalid item index.');
@@ -416,6 +546,7 @@ function applyDiscount() {
 
     closeDiscountOverlay();
 }
+
 let heldTransactions = []; // Array to store held transactions
 
 // Hold the current transaction
@@ -582,4 +713,24 @@ function viewSalesHistory() {
 function closeSalesHistory(button) {
     const overlay = button.parentElement;
     document.body.removeChild(overlay);
+}
+function completeSale(saleID) {
+    fetch('/arcade/complete-sale/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken(), // Add CSRF token to headers
+        },
+        body: JSON.stringify({ sale_id: saleId })  // Send sale ID to the server
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Sale has been marked as completed.');
+            // Optionally, update the UI to reflect the completed status
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => console.error('Error:', error));
 }

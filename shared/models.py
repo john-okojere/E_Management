@@ -52,7 +52,7 @@ class StaffProfile(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.user.phone_number} - {self.role or 'No Role Assigned'} ({self.section or 'No Section Assigned'})"
+        return f"{self.user.worker_id} - {self.role or 'No Role Assigned'} ({self.section or 'No Section Assigned'})"
 
     class Meta:
         verbose_name = "Staff Profile"

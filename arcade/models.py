@@ -21,6 +21,8 @@ class Inventory(models.Model):
 class Sale(models.Model):
     cashier = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)  # Who handled the sale
     total = models.DecimalField(max_digits=15, decimal_places=2)  # Total amount for the sale
+    completed = models.BooleanField(default=False)
+    paid = models.BooleanField(default=False)
     date = models.DateTimeField(auto_now_add=True)  # When the sale occurred
 
     def __str__(self):
@@ -42,9 +44,16 @@ class Receipt(models.Model):
     receipt_number = models.CharField(max_length=20, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-class Discount(models.Model):
+class SaleDiscount(models.Model):
     cashier = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE)
     proposed_discount = models.DecimalField(max_digits=10, decimal_places=2)
     approved = models.BooleanField(default=False)
-    approved_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='approver')
+    approved_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='sale_approver')
+
+class SaleItemDiscount(models.Model):
+    cashier = models.ForeignKey(StaffProfile, on_delete=models.CASCADE)
+    sale = models.ForeignKey(SaleItem, on_delete=models.CASCADE)
+    proposed_discount = models.DecimalField(max_digits=10, decimal_places=2)
+    approved = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='saleitem_approver')
